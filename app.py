@@ -1,5 +1,12 @@
 import streamlit as st
 
-st.title("App Cilindro Cicloide")
+st.title("Simulador de Cilindro en Rampa")
 
-st.write("Versión inicial del proyecto")
+angulo = st.slider(
+    "Ángulo de la rampa (°)",
+    0,
+    45,
+    15
+)
+
+st.write("Ángulo seleccionado:", angulo)
