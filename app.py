@@ -1,86 +1,153 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import plotly.express as px
+import matplotlib.pyplot as plt
 
-st.title("Simulador de Cilindro en Rampa")
-st.subheader("Módulo 1: Predicción teórica")
+st.title("Módulo 1: Predicción del movimiento del cilindro")
 
-g = 9.81
+st.markdown("""
+Este módulo predice si el cilindro **sube o baja la rampa** al variar la masa colgante,
+el número de barras y la posición radial de las barras.
+""")
 
-st.sidebar.header("Parámetros del experimento")
+# -----------------------------
+# Entradas del sistema
+# -----------------------------
 
-m = st.sidebar.number_input("Masa del cilindro (kg)", min_value=0.01, value=0.20, step=0.01)
-R = st.sidebar.number_input("Radio del cilindro (m)", min_value=0.001, value=0.03, step=0.001)
-theta_deg = st.sidebar.slider("Ángulo de la rampa (°)", 1, 45, 10)
-L = st.sidebar.number_input("Longitud recorrida sobre la rampa (m)", min_value=0.01, value=1.00, step=0.05)
+st.sidebar.header("Parámetros del cilindro")
 
-tipo = st.sidebar.selectbox(
-    "Tipo de cilindro",
-    ["Cilindro macizo", "Aro delgado", "Esfera maciza"]
-)
+M = st.sidebar.number_input("Masa del cilindro M (kg)", min_value=0.001, value=0.500, step=0.010)
+R = st.sidebar.number_input("Radio externo del cilindro R (m)", min_value=0.001, value=0.050, step=0.001)
+
+st.sidebar.header("Parámetros de las barras")
+
+N = st.sidebar.number_input("Número de barras N", min_value=0, value=4, step=1)
+mn = st.sidebar.number_input("Masa promedio de cada barra mn (kg)", min_value=0.0, value=0.020, step=0.001)
+Rx = st.sidebar.number_input("Radio de colocación de barras Rx (m)", min_value=0.0, value=0.030, step=0.001)
+
+st.sidebar.header("Sistema en la rampa")
+
+mc = st.sidebar.number_input("Masa colgante mc (kg)", min_value=0.0, value=0.100, step=0.001)
+theta_deg = st.sidebar.number_input("Ángulo de la rampa θ (grados)", min_value=0.0, max_value=90.0, value=10.0, step=0.5)
+g = st.sidebar.number_input("Gravedad g (m/s²)", min_value=0.0, value=9.81, step=0.01)
+
+st.sidebar.header("Simulación temporal")
+
+t_max = st.sidebar.number_input("Tiempo de simulación (s)", min_value=0.1, value=5.0, step=0.1)
+x0 = st.sidebar.number_input("Posición inicial sobre la rampa x₀ (m)", value=0.0, step=0.01)
+v0 = st.sidebar.number_input("Velocidad inicial v₀ (m/s)", value=0.0, step=0.01)
+
+# -----------------------------
+# Cálculo físico
+# -----------------------------
 
 theta = np.radians(theta_deg)
 
-if tipo == "Cilindro macizo":
-    k = 1/2
-elif tipo == "Aro delgado":
-    k = 1
-elif tipo == "Esfera maciza":
-    k = 2/5
+numerador = g * ((M + N * mn) * np.sin(theta) - mc)
 
-I = k * m * R**2
-a = g * np.sin(theta) / (1 + I/(m*R**2))
+denominador = (3/2) * M + N * mn * (1 + (Rx**2 / R**2)) + mc
 
-t_final = np.sqrt(2*L/a)
-v_final = a * t_final
-omega_final = v_final / R
+a = numerador / denominador
 
-st.header("Resultados teóricos")
+# -----------------------------
+# Predicción del sentido
+# -----------------------------
 
-col1, col2, col3 = st.columns(3)
+tolerancia = 1e-3
 
-col1.metric("Aceleración", f"{a:.3f} m/s²")
-col2.metric("Tiempo de descenso", f"{t_final:.3f} s")
-col3.metric("Velocidad final", f"{v_final:.3f} m/s")
+if a > tolerancia:
+    estado = "El cilindro baja la rampa"
+elif a < -tolerancia:
+    estado = "El cilindro sube la rampa"
+else:
+    estado = "El sistema está casi en equilibrio"
 
-st.write(f"Momento de inercia: **{I:.6f} kg·m²**")
-st.write(f"Velocidad angular final: **{omega_final:.3f} rad/s**")
+# -----------------------------
+# Resultados principales
+# -----------------------------
 
-st.header("Gráficas de predicción")
+st.subheader("Resultado de la predicción")
 
-t = np.linspace(0, t_final, 200)
-s = 0.5 * a * t**2
-v = a * t
+st.metric("Aceleración del cilindro", f"{a:.4f} m/s²")
+st.success(estado)
+
+st.write("Masa total del cilindro con barras:")
+
+masa_total = M + N * mn
+st.metric("Masa total", f"{masa_total:.4f} kg")
+
+I_total = 0.5 * M * R**2 + N * mn * Rx**2
+st.metric("Momento de inercia total", f"{I_total:.6f} kg·m²")
+
+# -----------------------------
+# Movimiento
+# -----------------------------
+
+t = np.linspace(0, t_max, 300)
+
+x = x0 + v0 * t + 0.5 * a * t**2
+v = v0 + a * t
 
 df = pd.DataFrame({
-    "Tiempo (s)": t,
-    "Posición sobre la rampa (m)": s,
-    "Velocidad (m/s)": v
+    "t (s)": t,
+    "x (m)": x,
+    "v (m/s)": v
 })
 
-fig1 = px.line(df, x="Tiempo (s)", y="Posición sobre la rampa (m)",
-               title="Posición vs tiempo")
-st.plotly_chart(fig1, use_container_width=True)
+st.subheader("Tabla de datos simulados")
+st.dataframe(df)
 
-fig2 = px.line(df, x="Tiempo (s)", y="Velocidad (m/s)",
-               title="Velocidad vs tiempo")
-st.plotly_chart(fig2, use_container_width=True)
+# -----------------------------
+# Gráfica posición-tiempo
+# -----------------------------
 
-st.header("Pregunta de predicción")
+st.subheader("Posición del cilindro en función del tiempo")
 
-respuesta = st.radio(
-    "Antes de realizar el experimento, ¿qué esperas observar?",
-    [
-        "El cilindro aumenta su velocidad de forma uniforme",
-        "El cilindro baja con velocidad constante",
-        "El cilindro se detiene antes de llegar al final",
-        "El movimiento no depende del ángulo"
-    ]
-)
+fig1, ax1 = plt.subplots()
+ax1.plot(t, x)
+ax1.set_xlabel("Tiempo (s)")
+ax1.set_ylabel("Posición sobre la rampa (m)")
+ax1.grid(True)
 
-if st.button("Validar predicción"):
-    if respuesta == "El cilindro aumenta su velocidad de forma uniforme":
-        st.success("Correcto. Para este modelo ideal, la aceleración es constante.")
-    else:
-        st.warning("Revisa el modelo teórico: en rodadura sin deslizamiento sobre una rampa ideal, el cilindro tiene aceleración constante.")
+st.pyplot(fig1)
+
+# -----------------------------
+# Gráfica velocidad-tiempo
+# -----------------------------
+
+st.subheader("Velocidad del cilindro en función del tiempo")
+
+fig2, ax2 = plt.subplots()
+ax2.plot(t, v)
+ax2.set_xlabel("Tiempo (s)")
+ax2.set_ylabel("Velocidad (m/s)")
+ax2.grid(True)
+
+st.pyplot(fig2)
+
+# -----------------------------
+# Explicación física
+# -----------------------------
+
+st.subheader("Interpretación física")
+
+st.markdown(f"""
+La aceleración calculada fue:
+
+**a = {a:.4f} m/s²**
+
+El término que decide el sentido del movimiento es:
+
+\[
+(M+Nm_n)\sin(\\theta)-m_c
+\]
+
+Para este caso:
+
+\[
+({M:.3f}+{N}({mn:.3f}))\sin({theta_deg:.2f}^\circ)-{mc:.3f}
+\]
+
+Si este valor es positivo, el peso del cilindro sobre la rampa domina y el cilindro baja.  
+Si es negativo, la masa colgante domina y el cilindro sube.
+""")
