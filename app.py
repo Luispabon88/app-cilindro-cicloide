@@ -1,7 +1,7 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import plotly.express as px
+import matplotlib.pyplot as plt
 
 st.title("Simulador de Cilindro en Rampa")
 st.subheader("Módulo 1: Predicción teórica")
